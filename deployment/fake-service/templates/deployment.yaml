@@ -1,0 +1,95 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 10%
+      maxUnavailable: 0
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit:  {{ .Values.revisionHistoryLimit }}
+  progressDeadlineSeconds:  {{ .Values.progressDeadlineSeconds }}
+  template:
+    metadata:
+      annotations:
+        ad.datadoghq.com/nginx.logs: '[{"source":"nginx","service":"{{ .Release.Name }}"}]'
+        ad.datadoghq.com/nodejs.logs: '[{"source":"nodejs","service":"{{ .Release.Name }}"}]'
+      labels:
+        app: {{ template "fullname" . }}
+    spec:
+      # [START hostAliases]
+      hostAliases:
+      - ip: "127.0.0.1"
+        hostnames:
+        - "nodejs"
+      # [END hostAliases]
+      # [START containers]
+      containers:
+        # [START container:nodejs]
+        - name: nodejs
+          image: "{{ .Values.nodejsImage.repository }}:{{ .Values.nodejsImage.tag }}"
+          imagePullPolicy: {{ .Values.nodejsImage.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.nodejsService.port }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.nodejsService.port }}
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "{{ .Values.nodejsService.port }}"
+            - name: NODE_ENV
+              value: "production"
+
+            # [END feature flags env]
+        # [END container:nodejs]
+        # [START container:nginx]
+        - name: nginx
+          image:  "{{ .Values.nginxImage.repository }}:{{ .Values.nginxImage.tag }}"
+          imagePullPolicy: {{ default "" .Values.nginxImage.pullPolicy | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.nginxService.port }}
+            - name: https
+              containerPort: 443
+          #Need to fill the liveness and readiness path
+          livenessProbe:
+            httpGet:
+              path: /health-check
+              port: http
+              httpHeaders:
+              - name: http-auth-health-check
+                value: KUBERNETES
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health-check
+              port: http
+              httpHeaders:
+              - name: http-auth-health-check
+                value: KUBERNETES
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+          - name: config-nginx-server
+            mountPath: /etc/nginx/conf.d/default.conf
+            subPath: nginx__default.conf
+          - name: config-nginx-server
+            mountPath: /etc/nginx/nginx.conf
+            subPath: nginx__nginx.conf
+        # [END containers:nginx]
+      # [END containers]
+      volumes:
+        - name: config-nginx-server
+          configMap:
+            name: {{ template "fullname" . }}

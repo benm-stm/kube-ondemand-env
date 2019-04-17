@@ -1,0 +1,37 @@
+{{- $sanityzedPrefix := .Values.onDemandEnv.prefix | replace "_" "-" | replace "/" "-" -}}
+{{- $isOnDemandEnvEnabled := .Values.onDemandEnv.prefix -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+{{- if .Values.nginxService.annotations }}
+  annotations:
+    {{- range $key, $value := .Values.ingress.annotations }}
+      {{- if $isOnDemandEnvEnabled }}
+        {{ $key }}: "{{ $sanityzedPrefix }}-{{ $value }}"
+      {{- else }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+spec:
+  type: {{ .Values.nginxService.type }}
+  {{if eq .Values.nginxService.type "LoadBalancer"}}
+  loadBalancerSourceRanges:
+{{ toYaml .Values.nginxService.loadBalancerSourceRanges | indent 4 }}
+  {{end}}
+  ports:
+    - name: {{ .Values.nginxService.name }}
+      port: {{ .Values.nginxService.port }}
+      targetPort: {{ .Values.nginxService.port }}
+      protocol: TCP
+      {{if (and (eq .Values.nginxService.type "NodePort") (not (empty .Values.nginxService.NodePort)))}}
+      nodePort: {{.Values.nginxService.NodePort}}
+      {{end}}
+  selector:
+    app: {{ template "fullname" . }}

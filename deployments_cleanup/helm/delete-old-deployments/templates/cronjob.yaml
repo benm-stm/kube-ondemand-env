@@ -1,0 +1,39 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: delete-old-deployments
+spec:
+  schedule: "0 */2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: delete-old-deployments
+            image: benmstm/delete-old-deployments:latest
+            env:
+            - name: DEVELOPMENT_KUBE_USER
+              valueFrom:
+               secretKeyRef:
+                 name: delete-old-deployments
+                 key: development-kube-user
+            - name: DEVELOPMENT_KUBE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: delete-old-deployments
+                  key: development-kube-uri
+            - name: DEVELOPMENT_KUBE_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: delete-old-deployments
+                  key: development-kube-pass
+            - name: DEVELOPMENT_KUBE_CA
+              valueFrom:
+                secretKeyRef:
+                  name: delete-old-deployments
+                  key: development-kube-ca
+            - name: THRESHOLD
+              value: "0"
+            - name: DRY-RUN
+              value: "0"
+          restartPolicy: OnFailure

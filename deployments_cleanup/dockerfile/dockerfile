@@ -1,0 +1,39 @@
+FROM debian:stretch-slim
+
+RUN apt update && apt install -y \
+        apt-transport-https \
+        wget \
+        curl \
+        sudo \
+        gnupg
+
+# Get Docker
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add - \
+    && echo "deb [arch=amd64] https://download.docker.com/linux/debian stretch stable" | sudo tee -a /etc/apt/sources.list.d/docker.list \
+    && apt update \
+    && apt install -y docker-ce
+
+# Get Kubectl
+RUN curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add - \
+    && echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list \
+    && apt update \
+    && apt install -y kubectl
+
+# Get Helm 2.8.2
+RUN cd /opt \
+    && wget -c https://storage.googleapis.com/kubernetes-helm/helm-v2.8.2-linux-amd64.tar.gz -O - | tar xz \
+    && mv linux-amd64/helm /usr/local/bin/helm \
+    && rm -rf linux-amd64 \
+    && helm init --client-only \
+    #&& helm plugin install https://github.com/databus23/helm-diff --version v2.8.2+2
+    && curl -L https://github.com/databus23/helm-diff/releases/download/v2.8.2%2B2/helm-diff-linux.tgz | tar -C $(helm home)/plugins -xzv
+
+# Clean the mess
+RUN apt clean \
+    && rm -rf /var/lib/apt/lists/*
+
+#copy gcloud auth and deployments cleanup script
+COPY delete-old-deployments.awk auth_and_delete_deployments.sh ./
+
+#ENTRYPOINT [helm ls | awk -v now_sec=$(date +%s) -v threshold=$THRESHOLD -v now=$(date '+%Y-%m-%d,%H:%M') -f delete-old-deployments.awk]
+ENTRYPOINT ["/bin/bash", "./auth_and_delete_deployments.sh"]

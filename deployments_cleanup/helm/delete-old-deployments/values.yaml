@@ -1,0 +1,6 @@
+secrets:
+  delete-old-deployments:
+    development-kube-user: ****
+    development-kube-uri: ****
+    development-kube-pass: ****
+    development-kube-ca: '*************************'
